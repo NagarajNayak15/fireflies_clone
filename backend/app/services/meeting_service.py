@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
@@ -21,15 +23,42 @@ class MeetingService:
         transcript: str,
     ) -> Meeting:
 
-        meeting = Meeting(title=title)
+        # -------------------------
+        # Parse Transcript
+        # -------------------------
+
+        parsed = TranscriptParser.parse(transcript)
+
+        # -------------------------
+        # Calculate Duration
+        # -------------------------
+
+        duration = (
+            max(
+                line.timestamp_seconds
+                for line in parsed.transcripts
+            )
+            if parsed.transcripts
+            else 0
+        )
+
+        # -------------------------
+        # Create Meeting
+        # -------------------------
+
+        meeting = Meeting(
+            title=title,
+            meeting_date=datetime.now(timezone.utc),
+            duration_seconds=duration,
+        )
 
         db.add(meeting)
         db.flush()
 
-        # Parse transcript
-        parsed = TranscriptParser.parse(transcript)
+        # -------------------------
+        # Save Participants
+        # -------------------------
 
-        # Save participants
         for participant in parsed.participants:
             db.add(
                 Participant(
@@ -38,7 +67,10 @@ class MeetingService:
                 )
             )
 
-        # Save transcript lines
+        # -------------------------
+        # Save Transcript Lines
+        # -------------------------
+
         for line in parsed.transcripts:
             db.add(
                 Transcript(
@@ -49,10 +81,16 @@ class MeetingService:
                 )
             )
 
-        # Generate AI response
+        # -------------------------
+        # Generate AI Response
+        # -------------------------
+
         ai = GeminiService.generate(transcript)
 
-        # Save summary
+        # -------------------------
+        # Save Summary
+        # -------------------------
+
         db.add(
             Summary(
                 meeting_id=meeting.id,
@@ -60,7 +98,10 @@ class MeetingService:
             )
         )
 
-        # Save topics
+        # -------------------------
+        # Save Topics
+        # -------------------------
+
         for topic in ai.topics:
             db.add(
                 Topic(
@@ -69,7 +110,10 @@ class MeetingService:
                 )
             )
 
-        # Save action items
+        # -------------------------
+        # Save Action Items
+        # -------------------------
+
         for item in ai.action_items:
             db.add(
                 ActionItem(
@@ -79,6 +123,10 @@ class MeetingService:
                     deadline=item.deadline,
                 )
             )
+
+        # -------------------------
+        # Commit
+        # -------------------------
 
         db.commit()
         db.refresh(meeting)
@@ -154,7 +202,7 @@ class MeetingService:
                 detail="Meeting not found",
             )
 
-        # Remove old participants
+        # Remove existing participants
         (
             db.query(Participant)
             .filter(Participant.meeting_id == meeting_id)
