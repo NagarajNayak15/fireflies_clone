@@ -1,41 +1,107 @@
-# Fireflies Clone - Frontend
+# Fireflies Clone — Frontend
 
-This is the Next.js frontend for the Fireflies.ai clone. It provides a beautiful, modern UI that interacts with the FastAPI backend.
+A Next.js (TypeScript, App Router) frontend for the Fireflies.ai clone backend.
 
-## Features Built
-- **Meetings Dashboard**: View statistics and recently uploaded meetings.
-- **Meeting Upload**: Supports uploading `.txt` transcripts or pasting text directly.
-- **Interactive Transcript Player**: Clicking a transcript line seeks the audio player, and as the audio plays, the current transcript line is highlighted!
-- **AI Summary & Action Items**: Easily view the AI-generated meeting artifacts and check off action items.
-- **Search**: Fully functional full-text search across the transcript, with easy next/prev jumping.
-- **Dark Mode Support**: Uses Tailwind's `dark:x` classes and system preferences.
+It talks to the deployed backend at
+`https://fireflies-clone-1.onrender.com` (FastAPI + SQLite).
 
-## Setup Instructions
+## Features
 
-1. **Install Dependencies**
-   ```bash
-   npm install
-   ```
+- **Meetings dashboard** (`/meetings`): list, search, sort, filter, stats cards,
+  "New Meeting" button, delete.
+- **Meeting detail** (`/meetings/[id]`): audio player, interactive transcript
+  with click-to-seek and active-line highlighting as the player plays,
+  in-transcript search with next/prev jump, AI summary, action items (toggle
+  complete), and topics/chapters.
+- **Create Meeting modal**: upload a `.txt` transcript **or** paste transcript
+  text (wrapped into a file client-side), plus a title.
+- **Edit Meeting modal**: edit participants (functional). Title/date are shown
+  read-only because the backend does not expose those endpoints yet.
+- **Delete confirmation modal**.
+- **Settings** (`/settings`) and **Analytics** (`/analytics`): "Coming soon"
+  placeholders.
+- **Toasts** for success/error feedback, and a cold-start loading message
+  ("Waking up the server...") because the free-tier backend spins down when idle.
 
-2. **Environment Variables**
-   Create a `.env.local` file at the root of the `frontend` folder with the following content:
-   ```env
-   NEXT_PUBLIC_API_URL=https://fireflies-clone-1.onrender.com
-   ```
-   *(Note: This is already created for you in this workspace.)*
+## Tech notes
 
-3. **Run the Development Server**
-   ```bash
-   npm run dev
-   ```
-   Open [http://localhost:3000](http://localhost:3000) in your browser.
+- Plain Client Components (`"use client"`), `useEffect` + `fetch`, `useState`.
+  No Server Actions, no API routes, no Redux.
+- Tailwind CSS utility classes only. Toasts via `react-hot-toast`.
+- All backend calls live in `lib/api.ts`. Types match the backend Pydantic
+  models exactly in `lib/types.ts`.
 
-## Backend Gaps & Notes
-- The "Edit Meeting" requirement mentioned editing title/date, but the backend only exposes `PUT /meetings/{id}/participants`. Therefore, the UI only supports editing participants.
-- The deployed Render backend is on a free tier, meaning it sleeps after inactivity. The "Upload Meeting" and initial dashboard fetch may take up to a minute if the server is asleep. The UI handles this gracefully by displaying loading spinners and informative toast messages.
-- The media player uses a generic placeholder audio track since the backend doesn't store/serve the actual audio files.
+## Setup
 
-## Folder Structure
-- `src/app`: Next.js App Router pages (`/`, `/meetings/[id]`, `/settings`).
-- `src/components`: Reusable UI components (`Sidebar`, `TopNav`, `CreateMeetingModal`, `DeleteConfirmModal`).
-- `src/lib`: Utility functions, including `api.ts` which handles all communication with the FastAPI backend.
+```bash
+cd frontend
+npm install
+cp .env.local .env.local   # already present; NEXT_PUBLIC_API_URL is set
+npm run dev
+```
+
+Then open http://localhost:3000 (redirects to `/meetings`).
+
+### Environment variables
+
+| Name | Required | Default | Description |
+|------|----------|---------|-------------|
+| `NEXT_PUBLIC_API_URL` | yes | `https://fireflies-clone-1.onrender.com` | Base URL of the backend API |
+
+## Folder structure
+
+```
+frontend/
+├─ app/
+│  ├─ layout.tsx              # root layout: sidebar + navbar + toaster
+│  ├─ globals.css             # tailwind directives
+│  ├─ page.tsx                # redirects to /meetings
+│  ├─ meetings/
+│  │  ├─ page.tsx             # dashboard route (uses MeetingsDashboard)
+│  │  └─ [id]/page.tsx        # meeting detail route
+│  ├─ settings/page.tsx       # placeholder
+│  └─ analytics/page.tsx      # placeholder
+├─ components/
+│  ├─ Sidebar.tsx
+│  ├─ Navbar.tsx
+│  ├─ LoadingState.tsx
+│  ├─ Modal.tsx
+│  ├─ MeetingsDashboard.tsx
+│  ├─ MeetingDetail.tsx       # player + transcript sync + summary/actions/topics
+│  ├─ CreateMeetingModal.tsx
+│  ├─ EditMeetingModal.tsx
+│  └─ DeleteModal.tsx
+├─ lib/
+│  ├─ api.ts                  # all backend calls
+│  ├─ types.ts                # response type definitions
+│  ├─ audio.ts                # generates a silent placeholder audio track
+│  ├─ format.ts               # date/duration/timestamp formatting
+│  └─ useDebounce.ts          # small debounce hook for search
+├─ .env.local
+├─ tailwind.config.ts
+├─ postcss.config.mjs
+├─ next.config.mjs
+├─ tsconfig.json
+└─ package.json
+```
+
+## Known backend gaps (no endpoint exists — not faked)
+
+These features are described in the spec but the backend does not provide an
+endpoint, so the UI either shows them read-only or disables them:
+
+1. **Edit meeting title / date** — backend only has
+   `PUT /meetings/{id}/participants`. The edit modal shows title/date as
+   read-only.
+2. **Add / edit / delete action items** — backend only has
+   `PATCH /action-items/{id}` to toggle `completed`. The detail page shows
+   action items and lets you toggle them, but not add/edit/delete.
+3. **Create meeting** only accepts `title` + a `.txt` upload (no date or
+   participant fields, and no "paste text" field). Pasted text is wrapped into a
+   `.txt` File client-side before upload.
+4. **No media file** is stored by the backend, so the player uses a generated
+   silent audio track (long enough for the transcript) to demo seek + sync.
+
+If you want to enable any of these, add the corresponding endpoint to the
+backend (e.g. `PUT /meetings/{id}` for title/date, `POST/PUT/DELETE
+/action-items`, and a media upload field).
